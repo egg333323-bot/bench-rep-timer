@@ -844,7 +844,7 @@ tabCamera.addEventListener('click', () => {
   let ctx           = canvas.getContext('2d');
   const SCAN_MS     = 800;  // how often we send a frame to Claude
 
-  const ANTHROPIC_API_KEY = "YOUR_ANTHROPIC_API_KEY_HERE"; // ← REPLACE WITH YOUR KEY
+  const ANTHROPIC_API_KEY = localStorage.getItem('ANTHROPIC_API_KEY');
 
   /* ── Phase UI ── */
   function setPhase(phase) {

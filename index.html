@@ -844,6 +844,8 @@ tabCamera.addEventListener('click', () => {
   let ctx           = canvas.getContext('2d');
   const SCAN_MS     = 800;  // how often we send a frame to Claude
 
+  const ANTHROPIC_API_KEY = "YOUR_ANTHROPIC_API_KEY_HERE"; // ← REPLACE WITH YOUR KEY
+
   /* ── Phase UI ── */
   function setPhase(phase) {
     currentPhase = phase;
@@ -955,15 +957,6 @@ tabCamera.addEventListener('click', () => {
     setAiStatus('Analyzing…', true);
     animateScanBar();
 
-    /*
-      We use a targeted prompt that tells Claude exactly what phase we're in
-      and what to look for. This keeps responses tiny and fast.
-
-      PHASE STATE MACHINE:
-        top   → detect bar lowering (below chin, arms bending) → transition to 'down'
-        down  → detect bar touching chest                       → transition to 'chest' (instant) → 'up'
-        up    → detect bar back at full extension               → REP COMPLETE → reset to 'top'
-    */
     const phasePrompts = {
       top: `You are watching a bench press from the side or overhead camera angle.
 The bar is currently at the TOP (arms extended above chest). Look carefully at the barbell's position.
@@ -996,9 +989,13 @@ Answer:`
     try {
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-api-key': ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01'
+        },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-6',
+          model: 'claude-3-5-sonnet-20240620',
           max_tokens: 20,
           messages: [{
             role: 'user',
@@ -1010,7 +1007,11 @@ Answer:`
         })
       });
 
-      if (!res.ok) { setAiStatus('API error', false); return; }
+      if (!res.ok) { 
+        console.error('API error:', res.status, await res.text());
+        setAiStatus('API error - check key', false); 
+        return; 
+      }
 
       const data = await res.json();
       const answer = data.content?.map(c => c.text || '').join('').trim().toUpperCase();
@@ -1019,23 +1020,20 @@ Answer:`
       if (currentPhase === 'top' && answer.includes('LOWERING')) {
         setPhase('down');
         setAiStatus('Bar lowering…', true);
-        repStartTime = performance.now(); // rep clock starts when bar leaves top
+        repStartTime = performance.now();
       }
       else if (currentPhase === 'down' && answer.includes('CHEST')) {
-        // Instant transition through chest → up
         currentPhase = 'chest';
         setPhase('up');
         setAiStatus('Touch! Press up…', true);
       }
       else if ((currentPhase === 'chest' || currentPhase === 'up') && answer.includes('TOP')) {
-        // REP COMPLETE
         const repMs = performance.now() - repStartTime;
         recordRep(repMs);
         setPhase('top');
         setAiStatus('Rep! Ready…', true);
       }
       else {
-        // No transition — still in same phase
         const statusMap = {
           top:   'Arms extended…',
           down:  'Bar lowering…',
@@ -1046,7 +1044,8 @@ Answer:`
       }
 
     } catch (err) {
-      setAiStatus('Error', false);
+      console.error('Analysis error:', err);
+      setAiStatus('Error - check console', false);
     }
   }
 
@@ -1074,7 +1073,6 @@ Answer:`
       });
     }
 
-    // Show newest first
     const reversed = [...repTimes].reverse();
     aiRepList.innerHTML = reversed.map((ms, ri) => {
       const origIdx = n - 1 - ri;
@@ -1093,7 +1091,6 @@ Answer:`
 
   /* ── Scan loop ── */
   function startScanLoop() {
-    // Fire immediately, then every SCAN_MS
     analyzeFrame();
     intervalId = setInterval(() => {
       if (tracking) analyzeFrame();

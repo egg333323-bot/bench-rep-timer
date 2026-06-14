@@ -1,0 +1,1117 @@
+< !DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Bench Rep Timer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #0A0A0B;
+  --surface:   #131315;
+  --panel:     #1C1C1F;
+  --border:    #2A2A2E;
+  --cyan:      #00E5FF;
+  --cyan-dim:  #00B8CC;
+  --cyan-glow: rgba(0,229,255,0.18);
+  --red:       #FF3B5C;
+  --green:     #00E096;
+  --text:      #F0F0F0;
+  --muted:     #555;
+  --lap-alt:   #161618;
+}
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  overscroll-behavior: none;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100%;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+/* ── TABS ── */
+.tab-bar {
+  display: flex;
+  width: 100%;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 14px 0;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+  position: relative;
+  transition: color 0.2s;
+  -webkit-tap-highlight-color: transparent;
+}
+.tab-btn.active {
+  color: var(--cyan);
+}
+.tab-btn.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 16px; right: 16px;
+  height: 2px;
+  background: var(--cyan);
+  border-radius: 2px 2px 0 0;
+}
+
+/* ── VIEWS ── */
+.view { display: none; width: 100%; flex-direction: column; align-items: center; flex: 1; }
+.view.active { display: flex; }
+
+/* ══════════════════════════════════
+   MANUAL STOPWATCH VIEW
+══════════════════════════════════ */
+header {
+  width: 100%;
+  padding: 16px 24px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.wordmark {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.precision-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--cyan-dim);
+  letter-spacing: 0.05em;
+}
+
+.clock-wrap {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 0 16px;
+}
+.clock-ring {
+  position: relative;
+  width: min(300px, 82vw);
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ring-svg {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+}
+.ring-track { fill: none; stroke: var(--border); stroke-width: 3; }
+.ring-progress {
+  fill: none; stroke: var(--cyan); stroke-width: 3; stroke-linecap: round;
+  transition: stroke-dashoffset 0.08s linear;
+  filter: drop-shadow(0 0 6px var(--cyan));
+}
+.time-display {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; z-index: 1;
+}
+.time-main {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: clamp(40px, 11vw, 58px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  line-height: 1;
+  transition: color 0.2s, text-shadow 0.2s;
+}
+.time-main.running {
+  color: var(--cyan);
+  text-shadow: 0 0 40px var(--cyan-glow), 0 0 80px var(--cyan-glow);
+}
+.time-centiseconds {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: clamp(20px, 5.5vw, 30px);
+  font-weight: 300;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  line-height: 1;
+  transition: color 0.2s;
+}
+.time-centiseconds.running { color: var(--cyan-dim); }
+.status-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--border);
+  margin-top: 8px;
+  transition: background 0.2s, box-shadow 0.2s;
+}
+.status-dot.running {
+  background: var(--cyan);
+  box-shadow: 0 0 10px var(--cyan);
+  animation: pulse 1s ease-in-out infinite;
+}
+
+.btn-row {
+  display: flex;
+  gap: 14px;
+  padding: 4px 24px 20px;
+  width: 100%;
+  max-width: 400px;
+  justify-content: center;
+}
+.btn {
+  position: relative;
+  flex: 1;
+  max-width: 150px;
+  height: 56px;
+  border: none;
+  border-radius: 16px;
+  font-family: 'Inter', sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.06s ease, box-shadow 0.06s ease;
+  will-change: transform;
+}
+.btn::after {
+  content: ''; position: absolute; inset: 0;
+  background: white; opacity: 0; border-radius: inherit;
+  transition: opacity 0.2s;
+}
+.btn.tapped::after { opacity: 0.12; transition: none; }
+.btn:active { transform: scale(0.94); }
+
+.btn-primary { background: var(--cyan); color: #000; box-shadow: 0 4px 24px rgba(0,229,255,0.3); }
+.btn-primary.stop-mode { background: var(--red); color: #fff; box-shadow: 0 4px 24px rgba(255,59,92,0.3); }
+.btn-secondary { background: var(--panel); color: var(--text); border: 1px solid var(--border); }
+.btn-secondary:disabled { opacity: 0.3; }
+
+.divider { width: calc(100% - 48px); height: 1px; background: var(--border); margin: 0 24px 16px; }
+
+.reps-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  width: calc(100% - 48px);
+  margin-bottom: 8px;
+}
+.reps-title { font-size: 11px; font-weight: 600; letter-spacing: 0.15em; text-transform: uppercase; color: var(--muted); }
+.reps-count { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); }
+
+.reps-scroll {
+  width: 100%; flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  padding: 0 24px 32px;
+}
+.reps-scroll::-webkit-scrollbar { display: none; }
+
+.rep-item {
+  display: flex; align-items: center;
+  padding: 12px 14px; border-radius: 10px; gap: 10px;
+  background: transparent; transition: background 0.15s;
+}
+.rep-item:nth-child(even) { background: var(--lap-alt); }
+.rep-item.rep-best .rep-time { color: var(--green); }
+.rep-item.rep-worst .rep-time { color: var(--red); }
+
+.rep-num { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); width: 28px; flex-shrink: 0; }
+.rep-time { font-family: 'JetBrains Mono', monospace; font-size: 16px; font-weight: 700; flex: 1; letter-spacing: 0.02em; }
+.rep-badge {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.08em;
+  padding: 2px 7px; border-radius: 6px; text-transform: uppercase;
+}
+.rep-badge.best { background: rgba(0,224,150,0.15); color: var(--green); }
+.rep-badge.worst { background: rgba(255,59,92,0.12); color: var(--red); }
+
+.empty-state { text-align: center; padding: 28px 0; color: var(--muted); font-size: 13px; font-style: italic; }
+
+/* ══════════════════════════════════
+   CAMERA AI VIEW
+══════════════════════════════════ */
+.camera-view {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 0 0;
+  flex: 1;
+}
+
+/* Camera feed container */
+.cam-container {
+  position: relative;
+  width: calc(100% - 32px);
+  max-width: 480px;
+  border-radius: 20px;
+  overflow: hidden;
+  background: #0d0d0e;
+  border: 1px solid var(--border);
+  aspect-ratio: 9/16;
+  max-height: 44vh;
+}
+
+#camVideo {
+  width: 100%; height: 100%; object-fit: cover;
+  display: block;
+}
+
+/* Overlay on camera */
+.cam-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+}
+
+/* Phase indicator bar at top of camera */
+.phase-bar {
+  width: 100%;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.7), transparent);
+}
+.phase-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text);
+  opacity: 0.5;
+  transition: opacity 0.3s, color 0.3s;
+}
+.phase-indicator.active { opacity: 1; }
+.phase-indicator.active.phase-top { color: var(--cyan); }
+.phase-indicator.active.phase-down { color: #FFB800; }
+.phase-indicator.active.phase-up { color: var(--green); }
+.phase-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: currentColor;
+}
+.phase-sep { color: var(--muted); opacity: 0.4; font-size: 10px; }
+
+/* Rep flash overlay */
+.rep-flash {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(0,224,150,0.18);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.1s;
+}
+.rep-flash.show { opacity: 1; }
+
+/* Bottom gradient on camera for rep count */
+.cam-bottom-overlay {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  padding: 24px 14px 14px;
+  background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+.cam-rep-counter {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1;
+}
+.cam-rep-label {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.5);
+  margin-bottom: 4px;
+}
+.cam-last-time {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  color: var(--cyan-dim);
+  text-align: right;
+}
+.cam-last-label {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.4);
+  text-align: right;
+  margin-bottom: 2px;
+}
+
+/* AI status chip */
+.ai-status-chip {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(0,0,0,0.6);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 20px;
+  padding: 4px 10px 4px 7px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  transition: color 0.3s, border-color 0.3s;
+}
+.ai-status-chip.analyzing {
+  color: var(--cyan);
+  border-color: rgba(0,229,255,0.3);
+}
+.ai-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--muted);
+  transition: background 0.3s;
+}
+.ai-status-chip.analyzing .ai-dot {
+  background: var(--cyan);
+  animation: pulse 0.8s ease-in-out infinite;
+}
+
+/* No camera placeholder */
+.no-cam {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  height: 100%; gap: 10px; color: var(--muted);
+}
+.no-cam svg { opacity: 0.3; }
+.no-cam p { font-size: 13px; }
+
+/* Camera controls */
+.cam-controls {
+  width: calc(100% - 32px);
+  max-width: 480px;
+  margin-top: 14px;
+  display: flex;
+  gap: 10px;
+}
+
+.cam-btn {
+  flex: 1;
+  height: 52px;
+  border: none;
+  border-radius: 14px;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.06s ease;
+  position: relative;
+  overflow: hidden;
+}
+.cam-btn::after {
+  content: ''; position: absolute; inset: 0;
+  background: white; opacity: 0; border-radius: inherit; transition: opacity 0.2s;
+}
+.cam-btn.tapped::after { opacity: 0.1; transition: none; }
+.cam-btn:active { transform: scale(0.95); }
+
+.cam-btn-start { background: var(--green); color: #000; }
+.cam-btn-stop  { background: var(--red); color: #fff; }
+.cam-btn-reset { background: var(--panel); color: var(--text); border: 1px solid var(--border); }
+.cam-btn-reset:disabled { opacity: 0.3; }
+
+/* AI rep list */
+.ai-reps-section {
+  width: calc(100% - 32px);
+  max-width: 480px;
+  margin-top: 14px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.ai-reps-header {
+  display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px;
+}
+.ai-reps-title { font-size: 11px; font-weight: 600; letter-spacing: 0.15em; text-transform: uppercase; color: var(--muted); }
+.ai-reps-count { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); }
+
+.ai-reps-scroll {
+  flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  padding-bottom: 32px; min-height: 80px;
+}
+.ai-reps-scroll::-webkit-scrollbar { display: none; }
+
+/* Analysis hint */
+.analysis-hint {
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+  padding: 10px 16px 0;
+  line-height: 1.5;
+  max-width: 480px;
+  width: calc(100% - 32px);
+}
+
+/* Analyze interval indicator */
+.scan-bar {
+  width: calc(100% - 32px);
+  max-width: 480px;
+  height: 2px;
+  background: var(--border);
+  border-radius: 2px;
+  margin-top: 10px;
+  overflow: hidden;
+}
+.scan-fill {
+  height: 100%;
+  background: var(--cyan);
+  width: 0%;
+  transition: width 0.1s linear;
+  border-radius: 2px;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-dot.running { animation: none; }
+  .ring-progress      { transition: none; }
+  .ai-dot             { animation: none !important; }
+}
+</style>
+</head>
+<body>
+
+<!-- ── TAB BAR ── -->
+<div class="tab-bar">
+  <button class="tab-btn active" id="tabManual">⏱ Manual</button>
+  <button class="tab-btn"       id="tabCamera">📷 Camera AI</button>
+</div>
+
+<!-- ═══════════════════════════════════════
+     VIEW 1 — MANUAL STOPWATCH
+═══════════════════════════════════════ -->
+<div class="view active" id="viewManual">
+
+  <header>
+    <span class="wordmark">Bench Timer</span>
+    <span class="precision-badge">±10ms</span>
+  </header>
+
+  <div class="clock-wrap">
+    <div class="clock-ring">
+      <svg class="ring-svg" viewBox="0 0 300 300" aria-hidden="true">
+        <circle class="ring-track"    cx="150" cy="150" r="139"/>
+        <circle class="ring-progress" cx="150" cy="150" r="139"
+                stroke-dasharray="873.5"
+                stroke-dashoffset="873.5"
+                transform="rotate(-90 150 150)"/>
+      </svg>
+      <div class="time-display">
+        <div class="time-main" id="timeMain">00:00</div>
+        <div class="time-centiseconds" id="timeCenti">.00</div>
+        <div class="status-dot" id="statusDot"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn btn-secondary" id="btnRepReset" disabled>Rep</button>
+    <button class="btn btn-primary"   id="btnStartStop">Start</button>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="reps-header">
+    <span class="reps-title">Reps</span>
+    <span class="reps-count" id="repsCount"></span>
+  </div>
+
+  <div class="reps-scroll" id="repList">
+    <div class="empty-state" id="emptyState">Start the timer to record reps</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     VIEW 2 — CAMERA AI
+═══════════════════════════════════════ -->
+<div class="view" id="viewCamera">
+  <div class="camera-view">
+
+    <!-- Camera feed -->
+    <div class="cam-container" id="camContainer">
+      <video id="camVideo" autoplay playsinline muted></video>
+
+      <div class="cam-overlay">
+        <!-- Phase bar -->
+        <div class="phase-bar">
+          <div class="phase-indicator phase-top" id="phaseTop">
+            <div class="phase-dot"></div>Arms Extended
+          </div>
+          <span class="phase-sep">›</span>
+          <div class="phase-indicator phase-down" id="phaseDown">
+            <div class="phase-dot"></div>Lowering
+          </div>
+          <span class="phase-sep">›</span>
+          <div class="phase-indicator phase-up" id="phaseUp">
+            <div class="phase-dot"></div>Press Up
+          </div>
+        </div>
+
+        <!-- AI status -->
+        <div class="ai-status-chip" id="aiChip">
+          <div class="ai-dot"></div>
+          <span id="aiChipText">Ready</span>
+        </div>
+
+        <!-- Rep flash -->
+        <div class="rep-flash" id="repFlash"></div>
+
+        <!-- Bottom counter -->
+        <div class="cam-bottom-overlay">
+          <div>
+            <div class="cam-rep-label">Reps</div>
+            <div class="cam-rep-counter" id="camRepCount">0</div>
+          </div>
+          <div>
+            <div class="cam-last-label">Last rep</div>
+            <div class="cam-last-time" id="camLastTime">—</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- No camera state -->
+      <div class="no-cam" id="noCamMsg">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+        </svg>
+        <p>Tap Start to enable camera</p>
+      </div>
+    </div>
+
+    <!-- Scan progress bar -->
+    <div class="scan-bar"><div class="scan-fill" id="scanFill"></div></div>
+
+    <!-- Controls -->
+    <div class="cam-controls">
+      <button class="cam-btn cam-btn-reset" id="camResetBtn" disabled>Reset</button>
+      <button class="cam-btn cam-btn-start" id="camStartBtn">Start</button>
+    </div>
+
+    <!-- Hint text -->
+    <p class="analysis-hint" id="analysisHint">
+      Position the camera to clearly show your bench press — side or overhead view works best.
+    </p>
+
+    <!-- AI rep list -->
+    <div class="ai-reps-section">
+      <div class="ai-reps-header">
+        <span class="ai-reps-title">Reps</span>
+        <span class="ai-reps-count" id="aiRepsCount"></span>
+      </div>
+      <div class="ai-reps-scroll" id="aiRepList">
+        <div class="empty-state">Camera reps will appear here</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════
+   SHARED UTILITIES
+═══════════════════════════════════════════ */
+function pad2(n) { return String(n).padStart(2, '0'); }
+
+function formatTime(ms) {
+  const totalSec = Math.floor(ms / 1000);
+  const min      = Math.floor(totalSec / 60);
+  const sec      = totalSec % 60;
+  const centi    = Math.floor((ms % 1000) / 10);
+  return { main: `${pad2(min)}:${pad2(sec)}`, centi: `.${pad2(centi)}` };
+}
+
+function formatShort(ms) {
+  const { main, centi } = formatTime(ms);
+  return main + centi;
+}
+
+// Reactive button handler — fires on touchstart (no 300ms delay)
+function reactive(btn, handler) {
+  let handled = false;
+  function fire(e) {
+    if (btn.disabled) return;
+    e.preventDefault();
+    if (handled) return;
+    handled = true;
+    btn.classList.add('tapped');
+    setTimeout(() => btn.classList.remove('tapped'), 120);
+    handler();
+  }
+  btn.addEventListener('touchstart', e => { handled = false; fire(e); }, { passive: false });
+  btn.addEventListener('mousedown',  e => { handled = false; fire(e); });
+  btn.addEventListener('touchend',   ()  => setTimeout(() => { handled = false; }, 50));
+}
+
+/* ═══════════════════════════════════════════
+   TAB SWITCHING
+═══════════════════════════════════════════ */
+const tabManual = document.getElementById('tabManual');
+const tabCamera = document.getElementById('tabCamera');
+const viewManual = document.getElementById('viewManual');
+const viewCamera = document.getElementById('viewCamera');
+
+tabManual.addEventListener('click', () => {
+  tabManual.classList.add('active');
+  tabCamera.classList.remove('active');
+  viewManual.classList.add('active');
+  viewCamera.classList.remove('active');
+});
+tabCamera.addEventListener('click', () => {
+  tabCamera.classList.add('active');
+  tabManual.classList.remove('active');
+  viewCamera.classList.add('active');
+  viewManual.classList.remove('active');
+});
+
+/* ═══════════════════════════════════════════
+   MANUAL STOPWATCH
+═══════════════════════════════════════════ */
+(function () {
+  let startTime = 0, elapsed = 0, running = false, rafId = null;
+  let repStart = 0, reps = [];
+
+  const CIRC = 873.5;
+  const timeMain   = document.getElementById('timeMain');
+  const timeCenti  = document.getElementById('timeCenti');
+  const statusDot  = document.getElementById('statusDot');
+  const btnSS      = document.getElementById('btnStartStop');
+  const btnRR      = document.getElementById('btnRepReset');
+  const repList    = document.getElementById('repList');
+  const repsCount  = document.getElementById('repsCount');
+  const emptyState = document.getElementById('emptyState');
+  const ringProg   = document.querySelector('.ring-progress');
+
+  function render() {
+    const now = running ? elapsed + (performance.now() - startTime) : elapsed;
+    const { main, centi } = formatTime(now);
+    timeMain.textContent = main;
+    timeCenti.textContent = centi;
+    const sec60  = (now / 1000) % 60;
+    ringProg.style.strokeDashoffset = CIRC - (sec60 / 60) * CIRC;
+    if (running) rafId = requestAnimationFrame(render);
+  }
+
+  function startStop() {
+    if (running) {
+      elapsed += performance.now() - startTime;
+      cancelAnimationFrame(rafId);
+      running = false;
+      btnSS.textContent = 'Start';
+      btnSS.classList.remove('stop-mode');
+      btnRR.textContent = 'Reset';
+      timeMain.classList.remove('running');
+      timeCenti.classList.remove('running');
+      statusDot.classList.remove('running');
+    } else {
+      startTime = performance.now();
+      if (elapsed === 0) repStart = 0;
+      running = true;
+      rafId = requestAnimationFrame(render);
+      btnSS.textContent = 'Stop';
+      btnSS.classList.add('stop-mode');
+      btnRR.textContent = 'Rep';
+      btnRR.disabled = false;
+      timeMain.classList.add('running');
+      timeCenti.classList.add('running');
+      statusDot.classList.add('running');
+    }
+  }
+
+  function repReset() {
+    if (running) {
+      const now   = elapsed + (performance.now() - startTime);
+      const split = now - repStart;
+      repStart    = now;
+      reps.unshift({ total: now, split });
+      renderReps();
+    } else {
+      elapsed = 0; repStart = 0; reps = [];
+      timeMain.textContent = '00:00';
+      timeCenti.textContent = '.00';
+      ringProg.style.strokeDashoffset = CIRC;
+      btnRR.disabled = true;
+      btnRR.textContent = 'Rep';
+      renderReps();
+    }
+  }
+
+  function renderReps() {
+    const n = reps.length;
+    repsCount.textContent = n > 0 ? `${n} rep${n > 1 ? 's' : ''}` : '';
+    if (n === 0) { repList.innerHTML = ''; repList.appendChild(emptyState); return; }
+
+    let bestIdx = -1, worstIdx = -1;
+    if (n >= 2) {
+      let best = Infinity, worst = -Infinity;
+      reps.forEach((r, i) => {
+        if (r.split < best)  { best  = r.split; bestIdx  = i; }
+        if (r.split > worst) { worst = r.split; worstIdx = i; }
+      });
+    }
+
+    repList.innerHTML = reps.map((rep, i) => {
+      const num = n - i;
+      const { main, centi } = formatTime(rep.split);
+      const cls = i === bestIdx ? 'rep-best' : i === worstIdx ? 'rep-worst' : '';
+      const badge = i === bestIdx ? '<span class="rep-badge best">Best</span>' :
+                    i === worstIdx ? '<span class="rep-badge worst">Slow</span>' : '';
+      return `<div class="rep-item ${cls}">
+        <span class="rep-num">${pad2(num)}</span>
+        <span class="rep-time">${main}${centi}</span>
+        ${badge}
+      </div>`;
+    }).join('');
+  }
+
+  reactive(btnSS, startStop);
+  reactive(btnRR, repReset);
+  btnRR.disabled = true;
+  repList.appendChild(emptyState);
+})();
+
+/* ═══════════════════════════════════════════
+   CAMERA AI REP DETECTION
+═══════════════════════════════════════════ */
+(function () {
+  /* -- DOM refs -- */
+  const camVideo    = document.getElementById('camVideo');
+  const noCamMsg    = document.getElementById('noCamMsg');
+  const camRepCount = document.getElementById('camRepCount');
+  const camLastTime = document.getElementById('camLastTime');
+  const aiChip      = document.getElementById('aiChip');
+  const aiChipText  = document.getElementById('aiChipText');
+  const repFlash    = document.getElementById('repFlash');
+  const scanFill    = document.getElementById('scanFill');
+  const camStartBtn = document.getElementById('camStartBtn');
+  const camResetBtn = document.getElementById('camResetBtn');
+  const aiRepList   = document.getElementById('aiRepList');
+  const aiRepsCount = document.getElementById('aiRepsCount');
+  const analysisHint= document.getElementById('analysisHint');
+  const phaseTop    = document.getElementById('phaseTop');
+  const phaseDown   = document.getElementById('phaseDown');
+  const phaseUp     = document.getElementById('phaseUp');
+
+  /* -- State -- */
+  let stream        = null;
+  let tracking      = false;
+  let repCount      = 0;
+  let repTimes      = [];
+  let currentPhase  = 'top';   // 'top' | 'down' | 'chest' | 'up'
+  let repStartTime  = 0;
+  let intervalId    = null;
+  let scanProgress  = 0;
+  let scanTimer     = null;
+  let canvas        = document.createElement('canvas');
+  let ctx           = canvas.getContext('2d');
+  const SCAN_MS     = 800;  // how often we send a frame to Claude
+
+  /* ── Phase UI ── */
+  function setPhase(phase) {
+    currentPhase = phase;
+    [phaseTop, phaseDown, phaseUp].forEach(el => el.classList.remove('active'));
+    if (phase === 'top')   phaseTop.classList.add('active');
+    if (phase === 'down')  phaseDown.classList.add('active');
+    if (phase === 'up')    phaseUp.classList.add('active');
+  }
+
+  /* ── AI status chip ── */
+  function setAiStatus(text, analyzing) {
+    aiChipText.textContent = text;
+    aiChip.classList.toggle('analyzing', analyzing);
+  }
+
+  /* ── Flash green on rep complete ── */
+  function flashRep() {
+    repFlash.classList.add('show');
+    setTimeout(() => repFlash.classList.remove('show'), 350);
+    if (navigator.vibrate) navigator.vibrate([60]);
+  }
+
+  /* ── Camera start / stop ── */
+  async function startCamera() {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        },
+        audio: false
+      });
+      camVideo.srcObject = stream;
+      noCamMsg.style.display = 'none';
+      camVideo.style.display = 'block';
+
+      camStartBtn.textContent = 'Stop';
+      camStartBtn.classList.remove('cam-btn-start');
+      camStartBtn.classList.add('cam-btn-stop');
+      camResetBtn.disabled = false;
+      tracking = true;
+
+      setPhase('top');
+      repStartTime = performance.now();
+      setAiStatus('Watching…', true);
+      analysisHint.textContent = 'AI is watching. Unrack the bar above your chest to begin the first rep.';
+
+      startScanLoop();
+    } catch (err) {
+      analysisHint.textContent = '⚠️ Camera access denied. Please allow camera permission and try again.';
+    }
+  }
+
+  function stopCamera() {
+    tracking = false;
+    clearInterval(intervalId);
+    clearTimeout(scanTimer);
+    scanFill.style.width = '0%';
+    if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+    camVideo.srcObject = null;
+    noCamMsg.style.display = 'flex';
+    camStartBtn.textContent = 'Start';
+    camStartBtn.classList.remove('cam-btn-stop');
+    camStartBtn.classList.add('cam-btn-start');
+    setAiStatus('Ready', false);
+    setPhase('top');
+    analysisHint.textContent = 'Position the camera to clearly show your bench press — side or overhead view works best.';
+  }
+
+  function resetAll() {
+    stopCamera();
+    repCount = 0; repTimes = []; currentPhase = 'top';
+    camRepCount.textContent = '0';
+    camLastTime.textContent = '—';
+    aiRepList.innerHTML = '<div class="empty-state">Camera reps will appear here</div>';
+    aiRepsCount.textContent = '';
+    camResetBtn.disabled = true;
+  }
+
+  /* ── Capture a JPEG frame from the live video ── */
+  function captureFrame() {
+    if (!camVideo.videoWidth) return null;
+    const W = 480, H = Math.round(480 * (camVideo.videoHeight / camVideo.videoWidth));
+    canvas.width = W; canvas.height = H;
+    ctx.drawImage(camVideo, 0, 0, W, H);
+    return canvas.toDataURL('image/jpeg', 0.82).split(',')[1]; // base64
+  }
+
+  /* ── Animated scan bar ── */
+  function animateScanBar() {
+    scanProgress = 0;
+    scanFill.style.width = '0%';
+    const start = performance.now();
+    function tick() {
+      const frac = Math.min((performance.now() - start) / SCAN_MS, 1);
+      scanFill.style.width = (frac * 100) + '%';
+      if (frac < 1 && tracking) scanTimer = requestAnimationFrame(tick);
+    }
+    scanTimer = requestAnimationFrame(tick);
+  }
+
+  /* ── Core: send frame to Claude Vision API ── */
+  async function analyzeFrame() {
+    if (!tracking || !camVideo.videoWidth) return;
+    const b64 = captureFrame();
+    if (!b64) return;
+
+    setAiStatus('Analyzing…', true);
+    animateScanBar();
+
+    /*
+      We use a targeted prompt that tells Claude exactly what phase we're in
+      and what to look for. This keeps responses tiny and fast.
+
+      PHASE STATE MACHINE:
+        top   → detect bar lowering (below chin, arms bending) → transition to 'down'
+        down  → detect bar touching chest                       → transition to 'chest' (instant) → 'up'
+        up    → detect bar back at full extension               → REP COMPLETE → reset to 'top'
+    */
+    const phasePrompts = {
+      top: `You are watching a bench press from the side or overhead camera angle.
+The bar is currently at the TOP (arms extended above chest). Look carefully at the barbell's position.
+
+Answer with ONLY one of these exact words (nothing else):
+- STILL_TOP  — the bar is still at the top, arms extended, not yet clearly moving downward
+- LOWERING   — the bar is clearly descending, arms visibly bending, bar moving toward the chest
+
+Answer:`,
+
+      down: `You are watching a bench press. The bar has been lowering. Look at the barbell position.
+
+Answer with ONLY one of these exact words:
+- LOWERING   — bar is still descending, not yet on/near chest
+- CHEST      — the bar is touching or nearly touching the lifter's chest/sternum (this is the bottom of the rep)
+
+Answer:`,
+
+      up: `You are watching a bench press. The lifter has touched the bar to their chest and is now pressing it back up.
+
+Answer with ONLY one of these exact words:
+- PRESSING   — bar is moving upward but NOT yet at full arm extension
+- TOP        — bar is back at the top with arms FULLY extended (rep is COMPLETE)
+
+Answer:`
+    };
+
+    const prompt = phasePrompts[currentPhase === 'chest' ? 'up' : currentPhase];
+
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 20,
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b64 } },
+              { type: 'text', text: prompt }
+            ]
+          }]
+        })
+      });
+
+      if (!res.ok) { setAiStatus('API error', false); return; }
+
+      const data = await res.json();
+      const answer = data.content?.map(c => c.text || '').join('').trim().toUpperCase();
+
+      // State machine transitions
+      if (currentPhase === 'top' && answer.includes('LOWERING')) {
+        setPhase('down');
+        setAiStatus('Bar lowering…', true);
+        repStartTime = performance.now(); // rep clock starts when bar leaves top
+      }
+      else if (currentPhase === 'down' && answer.includes('CHEST')) {
+        // Instant transition through chest → up
+        currentPhase = 'chest';
+        setPhase('up');
+        setAiStatus('Touch! Press up…', true);
+      }
+      else if ((currentPhase === 'chest' || currentPhase === 'up') && answer.includes('TOP')) {
+        // REP COMPLETE
+        const repMs = performance.now() - repStartTime;
+        recordRep(repMs);
+        setPhase('top');
+        setAiStatus('Rep! Ready…', true);
+      }
+      else {
+        // No transition — still in same phase
+        const statusMap = {
+          top:   'Arms extended…',
+          down:  'Bar lowering…',
+          chest: 'Press up!',
+          up:    'Pressing up…'
+        };
+        setAiStatus(statusMap[currentPhase] || 'Watching…', true);
+      }
+
+    } catch (err) {
+      setAiStatus('Error', false);
+    }
+  }
+
+  /* ── Record a completed rep ── */
+  function recordRep(ms) {
+    repCount++;
+    repTimes.push(ms);
+    camRepCount.textContent = repCount;
+    camLastTime.textContent = formatShort(ms);
+    flashRep();
+    renderAiReps();
+  }
+
+  function renderAiReps() {
+    const n = repTimes.length;
+    aiRepsCount.textContent = n > 0 ? `${n} rep${n > 1 ? 's' : ''}` : '';
+    if (n === 0) { aiRepList.innerHTML = '<div class="empty-state">Camera reps will appear here</div>'; return; }
+
+    let bestIdx = -1, worstIdx = -1;
+    if (n >= 2) {
+      let best = Infinity, worst = -Infinity;
+      repTimes.forEach((t, i) => {
+        if (t < best)  { best  = t; bestIdx  = i; }
+        if (t > worst) { worst = t; worstIdx = i; }
+      });
+    }
+
+    // Show newest first
+    const reversed = [...repTimes].reverse();
+    aiRepList.innerHTML = reversed.map((ms, ri) => {
+      const origIdx = n - 1 - ri;
+      const num  = n - ri;
+      const { main, centi } = formatTime(ms);
+      const cls  = origIdx === bestIdx ? 'rep-best' : origIdx === worstIdx ? 'rep-worst' : '';
+      const badge= origIdx === bestIdx  ? '<span class="rep-badge best">Best</span>' :
+                   origIdx === worstIdx ? '<span class="rep-badge worst">Slow</span>' : '';
+      return `<div class="rep-item ${cls}">
+        <span class="rep-num">${pad2(num)}</span>
+        <span class="rep-time">${main}${centi}</span>
+        ${badge}
+      </div>`;
+    }).join('');
+  }
+
+  /* ── Scan loop ── */
+  function startScanLoop() {
+    // Fire immediately, then every SCAN_MS
+    analyzeFrame();
+    intervalId = setInterval(() => {
+      if (tracking) analyzeFrame();
+    }, SCAN_MS);
+  }
+
+  /* ── Button wiring ── */
+  reactive(camStartBtn, () => {
+    if (tracking) stopCamera();
+    else startCamera();
+  });
+  reactive(camResetBtn, resetAll);
+
+  // Init
+  noCamMsg.style.display = 'flex';
+  camVideo.style.display = 'none';
+  camResetBtn.disabled = true;
+})();
+</script>
+</body>
+</html>

@@ -834,6 +834,25 @@ tabCamera.addEventListener('click', () => {
   let stream        = null;
   let tracking      = false;
   let repCount      = 0;
+  let stream        = null;
+let tracking      = false;
+let repCount      = 0;
+let repTimes      = [];
+let currentPhase  = 'top';
+let repStartTime  = 0;
+let intervalId    = null;
+let scanProgress  = 0;
+let scanTimer     = null;
+let canvas        = document.createElement('canvas');
+let ctx           = canvas.getContext('2d');
+
+/* ADD THIS RIGHT HERE ↓ */
+if (!localStorage.getItem('ANTHROPIC_API_KEY')) {
+  const key = prompt("Enter your Anthropic API key");
+  if (key) {
+    localStorage.setItem('ANTHROPIC_API_KEY', key);
+  }
+}
   let repTimes      = [];
   let currentPhase  = 'top';   // 'top' | 'down' | 'chest' | 'up'
   let repStartTime  = 0;
